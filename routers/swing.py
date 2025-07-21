@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, UploadFile, File, Query, HTTPException, Depends
 from sqlalchemy.orm import Session
 from typing import List
+from utils.security import get_current_user
 
 from utils.image_check import is_trading_chart
 from utils.gemini_helper import analyze_image_with_gemini
@@ -20,7 +21,8 @@ router = APIRouter()
 async def analyze_chart(
     file: UploadFile = File(...),
     timeframe: str = Query(..., enum=["H1", "D1", "W1"], description="Swing timeframe"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     # 1) Save upload
     file_id = str(uuid.uuid4())
@@ -42,7 +44,7 @@ async def analyze_chart(
 
     
     # 4) Persist into history
-    record = models.SwingAnalysisHistory(analysis=result)
+    record = models.SwingAnalysisHistory(analysis=result, user_id=current_user.id)
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -53,16 +55,17 @@ async def analyze_chart(
 
 
 @router.get("/history",  response_model=List[schemas.SwingAnalysisHistoryItem])
-
 def get_swing_history(
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
-    Return the most recent `limit` analyses, newest first.
+    Return the most recent `limit` analyses for the authenticated user, newest first.
     """
     rows = (
         db.query(models.SwingAnalysisHistory)
+          .filter(models.SwingAnalysisHistory.user_id == current_user.id)
           .order_by(models.SwingAnalysisHistory.created_at.desc())
           .limit(limit)
           .all()

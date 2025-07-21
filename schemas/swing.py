@@ -86,6 +86,7 @@ class PriceAlert(BaseModel):
 
 class SwingAnalysisHistoryItem(BaseModel):
     id: int
+    user_id: int
     created_at: datetime
     analysis: Dict[str, Any]
 
