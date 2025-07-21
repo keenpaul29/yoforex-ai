@@ -106,6 +106,10 @@ class User(Base):
     forum_comments = relationship("ForumComment", back_populates="author")
     liked_posts = relationship("ForumPost", secondary=post_likes, back_populates="likes")
     liked_comments = relationship("ForumComment", secondary=comment_likes, back_populates="likes")
+    swing_analysis_history = relationship("SwingAnalysisHistory", back_populates="user", cascade="all, delete-orphan")
+    scalp_analysis_history = relationship("ScalpAnalysisHistory", back_populates="user", cascade="all, delete-orphan")
+
+
 
 class JSONEncodedDict(TypeDecorator):
     """Enables JSN storage by encoding to/from TEXT on SQLite."""

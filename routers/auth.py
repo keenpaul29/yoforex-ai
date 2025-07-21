@@ -1,3 +1,4 @@
+from fastapi import status
 import logging
 import re
 import os
@@ -163,12 +164,75 @@ class PasswordReset(BaseModel):
             raise PydanticCustomError('password.length', 'Password must be at least 8 characters long')
         return v
 
+
 class ProfileResponse(BaseModel):
     name: str
     email: EmailStr
     phone: str
     is_verified: bool
     attempts: int
+
+# For update profile endpoint
+class ProfileUpdateRequest(BaseModel):
+    name: str | None = None
+    email: EmailStr | None = None
+    phone: str | None = None
+
+class ProfileUpdateRequest(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+    # Add more fields as needed
+    @validator('phone')
+    def validate_phone(cls, v):
+        if v and (len(v) < 6 or len(v) > 15):
+            raise ValueError('Invalid phone number')
+        return v
+
+# --- Profile Management Endpoints ---
+from fastapi import Response
+@router.get("/profile", response_model=ProfileResponse)
+def get_profile(user: User = Depends(get_current_user)):
+    return ProfileResponse(
+        name=user.name,
+        email=user.email,
+        phone=user.phone,
+        is_verified=user.is_verified,
+        attempts=user.attempts
+    )
+
+@router.put("/profile", response_model=ProfileResponse)
+def update_profile(
+    req: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    updated = False
+    if req.name is not None:
+        user.name = req.name
+        updated = True
+    if req.phone is not None:
+        user.phone = req.phone
+        updated = True
+    # Add more fields as needed
+    if updated:
+        db.commit()
+        db.refresh(user)
+    return ProfileResponse(
+        name=user.name,
+        email=user.email,
+        phone=user.phone,
+        is_verified=user.is_verified,
+        attempts=user.attempts
+    )
+
+@router.delete("/profile", status_code=204)
+def delete_profile(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    db.delete(user)
+    db.commit()
+    return Response(status_code=204)
 
 # --- Helper: send_whatsapp_otp ---
 def send_whatsapp_otp(phone: str, otp: str) -> Dict[str, Any]:
@@ -353,8 +417,41 @@ def reset_password(payload: PasswordReset, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "password_reset_successful"}
 
+
+from pydantic import BaseModel, EmailStr
+
+class ProfileUpdateRequest(BaseModel):
+    name: str | None = None
+    email: EmailStr | None = None
+    phone: str | None = None
+
 @router.get("/profile", response_model=ProfileResponse)
 def get_profile(current_user: User = Depends(get_current_user)):
+    return ProfileResponse(
+        name=current_user.name,
+        email=current_user.email,
+        phone=current_user.phone,
+        is_verified=current_user.is_verified,
+        attempts=current_user.attempts
+    )
+
+@router.put("/profile", response_model=ProfileResponse)
+def update_profile(payload: ProfileUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    updated = False
+    if payload.name is not None:
+        current_user.name = payload.name
+        updated = True
+    if payload.email is not None:
+        # Optionally: check for email uniqueness
+        current_user.email = payload.email
+        updated = True
+    if payload.phone is not None:
+        # Optionally: check for phone uniqueness/format
+        current_user.phone = payload.phone
+        updated = True
+    if updated:
+        db.commit()
+        db.refresh(current_user)
     return ProfileResponse(
         name=current_user.name,
         email=current_user.email,

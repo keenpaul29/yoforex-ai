@@ -84,7 +84,8 @@ Access the interactive API documentation:
 
 ## 🔍 API Endpoints
 
-### Authentication
+
+### Authentication & Profile
 - `POST /auth/register` - Register a new user
 - `POST /auth/login` - User login (email/password)
 - `POST /auth/login/request-otp` - Request OTP for phone login from Whatsapp
@@ -92,6 +93,8 @@ Access the interactive API documentation:
 - `POST /auth/request-password-reset` - Request password reset
 - `POST /auth/reset-password` - Reset password with OTP from Whatsapp
 - `POST /auth/logout` - Logout user
+- `GET /auth/profile` - Get current user profile
+- `PUT /auth/profile` - Update current user profile (name, email, phone)
 
 ### Chart Analysis
 - `POST /scalp/chart/` - Analyze chart for scalp trading

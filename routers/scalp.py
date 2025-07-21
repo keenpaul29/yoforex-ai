@@ -1,6 +1,8 @@
 import os
 import uuid
+
 from typing import List
+from utils.security import get_current_user
 
 from fastapi import APIRouter, UploadFile, File, Query, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -10,7 +12,7 @@ from utils.gemini_helper import analyze_image_with_gemini
 from utils.db import get_db
 
 import models
-import schemas.swing as schemas  # or import schemas.scalp as schemas if you have a scalp schema
+import schemas.scalp as schemas
 
 UPLOAD_DIR = "./uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -27,6 +29,7 @@ async def analyze_chart(
         description="Scalp timeframe"
     ),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     # 1) Save upload
     file_id = str(uuid.uuid4())
@@ -46,10 +49,8 @@ async def analyze_chart(
     finally:
         os.remove(path)
 
-    # 4) Persist into history (using the same model as your GET)
-    #    Change to SwingAnalysisHistory if you really want swing history,
-    #    or to ScalpAnalysisHistory if you have that model/schema instead.
-    record = models.SwingAnalysisHistory(analysis=result)
+    # 4) Persist into history
+    record = models.ScalpAnalysisHistory(analysis=result, user_id=current_user.id)
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -58,17 +59,19 @@ async def analyze_chart(
     return result
 
 
-@router.get("/history", response_model=List[schemas.SwingAnalysisHistoryItem])
-def get_swing_history(
+@router.get("/history", response_model=List[schemas.ScalpAnalysisHistoryItem])
+def get_scalp_history(
     limit: int = Query(50, ge=1, le=1000),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
-    Return the most recent `limit` analyses, newest first.
+    Return the most recent `limit` scalp analyses for the authenticated user, newest first.
     """
     rows = (
-        db.query(models.SwingAnalysisHistory)
-          .order_by(models.SwingAnalysisHistory.created_at.desc())
+        db.query(models.ScalpAnalysisHistory)
+          .filter(models.ScalpAnalysisHistory.user_id == current_user.id)
+          .order_by(models.ScalpAnalysisHistory.created_at.desc())
           .limit(limit)
           .all()
     )

@@ -21,8 +21,7 @@ router = APIRouter()
 async def analyze_chart(
     file: UploadFile = File(...),
     timeframe: str = Query(..., enum=["H1", "D1", "W1"], description="Swing timeframe"),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     # 1) Save upload
     file_id = str(uuid.uuid4())
@@ -44,10 +43,11 @@ async def analyze_chart(
 
     
     # 4) Persist into history
-    record = models.SwingAnalysisHistory(analysis=result, user_id=current_user.id)
-    db.add(record)
-    db.commit()
-    db.refresh(record)
+    # NOTE: No user_id is set here since upload is not user-specific anymore. You may want to set a default user or handle this differently if user_id is required.
+    # record = models.SwingAnalysisHistory(analysis=result, user_id=current_user.id)
+    # db.add(record)
+    # db.commit()
+    # db.refresh(record)
 
     # 5) Return the analysis JSON
     return result
