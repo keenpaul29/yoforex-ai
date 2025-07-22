@@ -15,7 +15,7 @@ from schemas.forum import (
     ForumStats
 )
 
-router = APIRouter(prefix="/forum", tags=["forum"])
+router = APIRouter(prefix="/forum", tags=["Forum"])
 
 # Category endpoints
 @router.get("/categories", response_model=List[ForumCategory])
