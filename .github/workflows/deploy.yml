@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1) Check out your code
+      # 1) Checkout your code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2) Set up Python
+      # 2) Install Python
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
@@ -26,15 +26,15 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4) Write the SSH private key to a file
+      # 4) Write your SSH private key to a file
       - name: Install SSH private key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-      # 5) (Optional) Verify the key file is present
-      - name: Debug: list SSH dir
+      # 5) Verify that the key file is really there
+      - name: Debug: list SSH directory
         run: |
           echo "Contents of ~/.ssh:"
           ls -la ~/.ssh
@@ -46,8 +46,9 @@ jobs:
           host:        ${{ secrets.SSH_HOST }}         # e.g. 206.206.127.10
           username:    ${{ secrets.SSH_USER }}         # e.g. deploy
           port:        22
-          key_path:    ~/.ssh/id_ed25519                # matches above
+          key_path:    ~/.ssh/deploy_key               # must match the file you wrote
           fingerprint: ${{ secrets.SSH_FINGERPRINT }}  # e.g. SHA256:BVdSKL366dHPKsMrrtLyOg5m0wccZ+bt9OBgGs4FRbo
+          debug:       true
           script: |
             set -e
             cd /home/yoforexai
