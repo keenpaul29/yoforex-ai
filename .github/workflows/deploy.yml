@@ -29,14 +29,14 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-      - name: Deploy to server
+      - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v0.1.8
         with:
           host:        ${{ secrets.SSH_HOST }}
           username:    ${{ secrets.SSH_USER }}
           port:        22
           key_path:    ~/.ssh/deploy_key
-          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+          fingerprint: ${{ secrets.SSH_FINGERPRINT }}
           debug:       true
           script: |
             set -e
