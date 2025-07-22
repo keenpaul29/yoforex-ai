@@ -32,11 +32,11 @@ jobs:
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v0.1.8
         with:
-          host:        ${{ secrets.SSH_HOST }}
-          username:    ${{ secrets.SSH_USER }}
+          host:        ${{ secrets.SSH_HOST }}         # e.g. 206.206.127.10
+          username:    ${{ secrets.SSH_USER }}         # e.g. deploy
           port:        22
           key_path:    ~/.ssh/deploy_key
-          fingerprint: ${{ secrets.SSH_FINGERPRINT }}
+          fingerprint: ${{ secrets.SSH_FINGERPRINT }}  # e.g. SHA256:BVdSKL366dHPKsMrrtLyOg5m0wccZ+bt9OBgGs4FRbo
           debug:       true
           script: |
             set -e
