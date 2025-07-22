@@ -25,12 +25,13 @@ jobs:
       - name: Install SSH private key
         run: |
           mkdir -p ~/.ssh
+          # write your private key (from the SSH_PRIVATE_KEY secret) to a file
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-      - name: Debug: list out ~/.ssh
+      - name: Debug: verify key file on runner
         run: |
-          echo "Contents of ~/.ssh:"
+          echo "Runner ~/.ssh contents:"
           ls -la ~/.ssh
 
       - name: Deploy via SSH
@@ -46,6 +47,6 @@ jobs:
             set -e
             cd /home/yoforexai
             git pull origin main
-            python -m pip install --upgrade pip
+            pip install --upgrade pip
             pip install -r requirements.txt
             sudo systemctl restart backend.service
