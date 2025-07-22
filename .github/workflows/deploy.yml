@@ -41,7 +41,6 @@ jobs:
           host:        ${{ secrets.SSH_HOST }}
           username:    ${{ secrets.SSH_USER }}
           port:        22
-          # match the filename you echoed above
           key_path:    ~/.ssh/deploy_key
           fingerprint: ${{ secrets.SSH_FINGERPRINT }}
           debug:       true
