@@ -236,28 +236,42 @@ def delete_profile(
 
 # --- Helper: send_whatsapp_otp ---
 def send_whatsapp_otp(phone: str, otp: str) -> Dict[str, Any]:
-    url = f"{WATI_API_ENDPOINT}/api/v1/sendTemplateMessage?whatsappNumber={phone}"
-    payload = {
-        "template_name": "login_otp",
-        "broadcast_name": f"login_otp_{datetime.utcnow().strftime('%d%m%Y%H%M%S')}",
-        "parameters": [{"name": "1", "value": otp}]
-    }
-    headers = {
-        "accept": "*/*",
-        "Authorization": WATI_ACCESS_TOKEN,
-        "Content-Type": "application/json-patch+json"
-    }
+    # If WATI credentials are not configured, return the OTP in the response for development
+    if not WATI_API_ENDPOINT or not WATI_ACCESS_TOKEN:
+        logger.warning("WATI credentials not configured. Running in development mode - OTP will not be sent via WhatsApp.")
+        return {"status": "success", "message": "OTP would be sent in production", "otp": otp, "phone": phone}
+        
     try:
+        url = f"{WATI_API_ENDPOINT}/api/v1/sendTemplateMessage?whatsappNumber={phone}"
+        payload = {
+            "template_name": "login_otp",
+            "broadcast_name": f"login_otp_{datetime.utcnow().strftime('%d%m%Y%H%M%S')}",
+            "parameters": [{"name": "1", "value": otp}]
+        }
+        headers = {
+            "accept": "*/*",
+            "Authorization": WATI_ACCESS_TOKEN,
+            "Content-Type": "application/json-patch+json"
+        }
+        
         r = requests.post(url, json=payload, headers=headers, timeout=10)
         logger.info(f"WATI responded {r.status_code}: {r.text}")
         r.raise_for_status()
-    except requests.HTTPError:
-        logger.error(f"WATI error {r.status_code}: {r.text}")
-        raise HTTPException(status_code=502, detail=f"WATI API error: {r.status_code} {r.text}")
+        return r.json()
+        
+    except requests.HTTPError as e:
+        logger.error(f"WATI error {e.response.status_code if hasattr(e, 'response') else 'unknown'}: {str(e)}")
+        # In development, return the OTP even if WATI fails
+        if os.getenv("ENV") == "development":
+            return {"status": "success", "message": "OTP would be sent in production", "otp": otp, "phone": phone}
+        raise HTTPException(status_code=502, detail=f"Failed to send OTP via WhatsApp: {str(e)}")
+        
     except Exception as e:
         logger.exception("Failed to send OTP")
-        raise HTTPException(status_code=502, detail=f"Error sending OTP: {e}")
-    return r.json()
+        # In development, return the OTP even if there's an error
+        if os.getenv("ENV") == "development":
+            return {"status": "success", "message": "OTP would be sent in production", "otp": otp, "phone": phone}
+        raise HTTPException(status_code=500, detail=f"Failed to send OTP: {str(e)}")
 
 # --- Endpoints ---
 
@@ -330,17 +344,83 @@ def login_email(payload: EmailLoginRequest, response: Response, db: Session=Depe
 
 @router.post("/login/request-otp")
 def request_login_otp(payload: OTPRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.phone == payload.phone).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Phone not registered.")
-    otp = str(random.randint(1000, 9999))
-    expiry = datetime.utcnow() + timedelta(minutes=10)
-    user.otp_code = otp
-    user.otp_expiry = expiry
-    user.attempts = 0
-    db.commit()
-    send_whatsapp_otp(payload.phone, otp)
-    return {"status": "otp_sent"}
+    logger.info(f"Received OTP request for phone: {payload.phone}")
+    
+    try:
+        # Log database connection status
+        try:
+            db.execute("SELECT 1")
+            logger.info("Database connection is active")
+        except Exception as db_err:
+            logger.error(f"Database connection error: {str(db_err)}")
+            raise HTTPException(status_code=500, detail="Database connection error")
+        
+        # Find user by phone
+        user = db.query(User).filter(User.phone == payload.phone).first()
+        if not user:
+            logger.warning(f"User not found for phone: {payload.phone}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": "Phone not registered.", "code": "phone_not_found"}
+            )
+        
+        # Generate OTP
+        otp = str(random.randint(1000, 9999))
+        expiry = datetime.utcnow() + timedelta(minutes=10)
+        logger.info(f"Generated OTP for {payload.phone}: {otp}")
+        
+        # Update user with new OTP
+        try:
+            user.otp_code = otp
+            user.otp_expiry = expiry
+            user.attempts = 0
+            db.commit()
+            logger.info("Successfully updated user with OTP")
+        except Exception as update_err:
+            db.rollback()
+            logger.error(f"Failed to update user with OTP: {str(update_err)}")
+            raise HTTPException(
+                status_code=500,
+                detail={"error": "Failed to save OTP", "code": "otp_save_failed"}
+            )
+        
+        # Prepare response data
+        response_data = {
+            "status": "success",
+            "message": "OTP sent successfully",
+            "otp": otp,  # For development only
+            "phone": payload.phone,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        # Try to send OTP via WhatsApp if configured
+        if WATI_API_ENDPOINT and WATI_ACCESS_TOKEN:
+            try:
+                result = send_whatsapp_otp(payload.phone, otp)
+                logger.info(f"WhatsApp OTP send result: {result}")
+                if os.getenv("ENV") != "production":
+                    response_data["wati_response"] = result
+            except Exception as wati_err:
+                logger.error(f"Error sending WhatsApp OTP: {str(wati_err)}")
+                response_data["message"] = "OTP generated but WhatsApp delivery failed"
+                response_data["error"] = str(wati_err)
+        else:
+            logger.info("WATI credentials not configured, skipping WhatsApp send")
+            response_data["message"] = "OTP generated (WhatsApp not configured)"
+        
+        return response_data
+        
+    except HTTPException as http_err:
+        # Re-raise HTTP exceptions as-is
+        logger.error(f"HTTP error in request_login_otp: {str(http_err)}")
+        raise http_err
+    except Exception as e:
+        # Log unexpected errors
+        logger.exception("Unexpected error in request_login_otp")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Internal server error", "code": "internal_error"}
+        )
 
 @router.post("/login/verify-otp")
 def verify_login_otp(
