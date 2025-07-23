@@ -16,6 +16,7 @@ from pydantic_core import PydanticCustomError
 from passlib.context import CryptContext
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from utils.db import get_db
 from models import User
@@ -349,7 +350,7 @@ def request_login_otp(payload: OTPRequest, db: Session = Depends(get_db)):
     try:
         # Log database connection status
         try:
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
             logger.info("Database connection is active")
         except Exception as db_err:
             logger.error(f"Database connection error: {str(db_err)}")
