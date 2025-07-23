@@ -3,13 +3,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { authAPI } from '@/utils/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp, TrendingDown, DollarSign, Target, Calculator, Brain, Bell, BarChart, ArrowUpRight, ArrowDownRight, Calendar, MapPin, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Target, Calculator, Brain, Bell, BarChart, ArrowUpRight, ArrowDownRight, Calendar, MapPin, Loader2, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart, Bar } from 'recharts';
 import { useState, useEffect } from 'react';
-import { marketAPI, tradingAPI, newsAPI, forumAPI } from '@/utils/api';
 import { useRouter } from 'next/navigation';
+import { fetchDashboardData } from '@/services/dashboardService';
+import { authAPI } from '@/utils/api';
+import { Alert, AlertTitle, AlertDescription} from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
 
 // Types
 type CurrencyPair = {
@@ -130,64 +132,47 @@ export default function Dashboard() {
     }
   ];
 
-  // Fetch all data on component mount
+  // Fetch data on component mount and when active tab changes
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchData = async () => {
       try {
+        setError(null);
         setLoading(true);
-
-        // Fetch all data in parallel with proper error handling
-        const [pairs, performance, swing, scalp, latestNews, posts] = await Promise.all([
-          marketAPI.getCurrencyPairs().catch((err) => {
-            console.error('Error fetching currency pairs:', err);
-            return sampleCurrencyPairs;
-          }),
-          marketAPI.getPerformanceData().catch((err) => {
-            console.error('Error fetching performance data:', err);
-            return samplePerformanceData;
-          }),
-          tradingAPI.getSwingHistory(6).catch((err) => {
-            console.error('Error fetching swing data:', err);
-            return sampleSwingData;
-          }),
-          tradingAPI.getScalpHistory(6).catch((err) => {
-            console.error('Error fetching scalp data:', err);
-            return sampleScalpData;
-          }),
-          newsAPI.getNews().catch((err) => {
-            console.error('Error fetching news:', err);
-            return [];
-          }),
-          forumAPI.getPosts().catch((err) => {
-            console.error('Error fetching forum posts:', err);
-            return [];
-          })
-        ]);
-
-        setCurrencyPairs(Array.isArray(pairs) ? pairs : sampleCurrencyPairs);
-        setPerformanceData(Array.isArray(performance) ? performance : samplePerformanceData);
-        setSwingData(Array.isArray(swing) ? swing : sampleSwingData);
-        setScalpData(Array.isArray(scalp) ? scalp : sampleScalpData);
-        setNews(Array.isArray(latestNews) ? latestNews : []);
-        setCommunityPosts(Array.isArray(posts) && posts.length > 0 ? posts : sampleCommunityPosts);
-
-      } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-        setError('Failed to load dashboard data. Using sample data instead.');
-        // Set sample data as fallback
-        setCurrencyPairs(sampleCurrencyPairs);
-        setPerformanceData(samplePerformanceData);
-        setSwingData(sampleSwingData);
-        setScalpData(sampleScalpData);
-        setNews([]);
-        setCommunityPosts(sampleCommunityPosts);
+        
+        // Only show loading skeleton for the active tab
+        const data = await fetchDashboardData();
+        
+        if (!isMounted) return;
+        
+        // Update state with fetched data
+        setCurrencyPairs(data.currencyPairs);
+        setPerformanceData(data.performanceData);
+        setSwingData(data.swingData);
+        setScalpData(data.scalpData);
+        setNews(data.news);
+        setCommunityPosts(data.communityPosts);
+        
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        if (isMounted) {
+          setError('Unable to load dashboard data. Some features may be limited.');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
-  }, []);
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab]); // Re-fetch when tab changes
 
   // Format currency pair data
   const formatCurrencyPairs = (pairs: any[]): CurrencyPair[] => {
@@ -232,6 +217,71 @@ export default function Dashboard() {
     
     fetchProfile();
   }, []);
+
+  if (loading && !currencyPairs.length) {
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="pb-2">
+                <div className="h-4 bg-muted rounded w-1/2"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-muted rounded w-3/4"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <Card className="col-span-4 animate-pulse">
+            <CardHeader>
+              <div className="h-6 bg-muted rounded w-1/3"></div>
+            </CardHeader>
+            <CardContent className="h-[300px] bg-muted/20 rounded"></CardContent>
+          </Card>
+          <Card className="col-span-3 animate-pulse">
+            <CardHeader>
+              <div className="h-6 bg-muted rounded w-1/3"></div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="h-4 bg-muted rounded w-3/4"></div>
+                  <div className="h-3 bg-muted rounded w-1/2"></div>
+                  <div className="h-3 bg-muted rounded w-1/4"></div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show error message if there's an error and no data is loaded
+  if (error && !currencyPairs.length) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Loading Data</AlertTitle>
+          <AlertDescription className="mt-2">
+            {error} Some features may be limited. Please try refreshing the page.
+          </AlertDescription>
+        </Alert>
+        <Button 
+          variant="outline" 
+          className="mt-4"
+          onClick={() => window.location.reload()}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Refresh Page
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -327,8 +377,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Performance Statistics */}
         <Card className="lg:col-span-2 bg-slate-800/50 border-slate-700">
-          <CardHeader>
-            <div className="flex items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
               <CardTitle className="text-white">Performance Statistics</CardTitle>
               <Tabs defaultValue="week" className="w-auto">
                 <TabsList className="bg-slate-700">
