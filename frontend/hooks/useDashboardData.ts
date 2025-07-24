@@ -7,9 +7,11 @@ const useDashboardData = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchDashboardData = useCallback(async () => {
-    try {
+  const fetchDashboardData = useCallback(async (showLoadingSpinner = true) => {
+    if (showLoadingSpinner) {
       setLoading(true);
+    }
+    try {
       setError(null);
 
       // Fetch data in parallel
@@ -65,7 +67,9 @@ const useDashboardData = () => {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load dashboard data. Please try again later.');
     } finally {
-      setLoading(false);
+        if (showLoadingSpinner) {
+            setLoading(false);
+        }
     }
   }, []);
 
@@ -88,10 +92,16 @@ const useDashboardData = () => {
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboardData(true); // Initial fetch with loading spinner
+
+    const intervalId = setInterval(() => {
+      fetchDashboardData(false); // Subsequent fetches without loading spinner
+    }, 30000); // Poll every 30 seconds
+
+    return () => clearInterval(intervalId); // Cleanup on unmount
   }, [fetchDashboardData]);
 
-  return { data, loading, error, refetch: fetchDashboardData };
+  return { data, loading, error, refetch: () => fetchDashboardData(true) };
 };
 
 export default useDashboardData;
