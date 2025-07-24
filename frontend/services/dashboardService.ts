@@ -93,7 +93,7 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
     try {
       // Fetch prices data
       console.log('Fetching prices...');
-      const pricesResponse = await fetchWithErrorHandling('/prices/prices?use_mock=true');
+      const pricesResponse = await fetchWithErrorHandling('/prices/prices');
       pricesData = Array.isArray(pricesResponse) ? pricesResponse : [];
       console.log('Prices data:', pricesData);
     } catch (error) {
@@ -105,16 +105,57 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
       // Fetch news data
       console.log('Fetching news...');
       const newsResponse = await fetchWithErrorHandling('/news/');
-      // Extract top_news from the response if it exists
-      newsData = newsResponse?.top_news || [];
+      // Extract top_news from the response and transform to match frontend format
+      newsData = newsResponse?.top_news?.map((article: any) => ({
+        id: article.headline || Math.random().toString(),
+        headline: article.headline,
+        title: article.headline,
+        summary: article.summary,
+        published_at: article.time,
+        time: article.time,
+        source: article.source,
+        url: article.url,
+        sentiment: article.sentiment
+      })) || [];
       console.log('News data:', newsData);
     } catch (error) {
       console.error('Error in news fetch:', error);
       newsData = [];
     }
 
-    // Generate sample data for other sections
-    const performanceData = generateSamplePerformanceData();
+    // Fetch additional data
+    let performanceData = [];
+    let forumPosts = [];
+
+    try {
+      const performanceResponse = await fetchWithErrorHandling('/performance/');
+      performanceData = performanceResponse?.by_day?.map((day: any) => ({
+        day: day.day,
+        value: day.net_pct
+      })) || generateSamplePerformanceData();
+    } catch (error) {
+      console.error('Error fetching performance data:', error);
+      performanceData = generateSamplePerformanceData();
+    }
+
+    try {
+      const forumResponse = await fetchWithErrorHandling('/forum/posts');
+      forumPosts = forumResponse?.posts?.slice(0, 5)?.map((post: any) => ({
+        id: post.id,
+        author: post.author?.name || 'Anonymous',
+        content: post.content,
+        likes: post.like_count || 0,
+        comments: post.comment_count || 0,
+        timeAgo: new Date(post.created_at).toLocaleDateString(),
+        time: post.created_at,
+        replies: post.comment_count || 0,
+        avatar: '/default-avatar.png'
+      })) || [];
+    } catch (error) {
+      console.error('Error fetching forum posts:', error);
+      forumPosts = [];
+    }
+
     const swingData = generateSampleTradingData('Swing');
     const scalpData = generateSampleTradingData('Scalp');
 

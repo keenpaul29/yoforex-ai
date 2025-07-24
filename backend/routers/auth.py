@@ -11,7 +11,7 @@ import phonenumbers
 from fastapi import APIRouter, HTTPException, Depends, status, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, validator, field_validator
 from pydantic_core import PydanticCustomError
 from passlib.context import CryptContext
 from dotenv import load_dotenv
@@ -179,11 +179,8 @@ class ProfileUpdateRequest(BaseModel):
     email: EmailStr | None = None
     phone: str | None = None
 
-class ProfileUpdateRequest(BaseModel):
-    name: str | None = None
-    phone: str | None = None
-    # Add more fields as needed
-    @validator('phone')
+    @field_validator('phone')
+    @classmethod
     def validate_phone(cls, v):
         if v and (len(v) < 6 or len(v) > 15):
             raise ValueError('Invalid phone number')
@@ -499,44 +496,4 @@ def reset_password(payload: PasswordReset, db: Session = Depends(get_db)):
     return {"status": "password_reset_successful"}
 
 
-from pydantic import BaseModel, EmailStr
 
-class ProfileUpdateRequest(BaseModel):
-    name: str | None = None
-    email: EmailStr | None = None
-    phone: str | None = None
-
-@router.get("/profile", response_model=ProfileResponse)
-def get_profile(current_user: User = Depends(get_current_user)):
-    return ProfileResponse(
-        name=current_user.name,
-        email=current_user.email,
-        phone=current_user.phone,
-        is_verified=current_user.is_verified,
-        attempts=current_user.attempts
-    )
-
-@router.put("/profile", response_model=ProfileResponse)
-def update_profile(payload: ProfileUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    updated = False
-    if payload.name is not None:
-        current_user.name = payload.name
-        updated = True
-    if payload.email is not None:
-        # Optionally: check for email uniqueness
-        current_user.email = payload.email
-        updated = True
-    if payload.phone is not None:
-        # Optionally: check for phone uniqueness/format
-        current_user.phone = payload.phone
-        updated = True
-    if updated:
-        db.commit()
-        db.refresh(current_user)
-    return ProfileResponse(
-        name=current_user.name,
-        email=current_user.email,
-        phone=current_user.phone,
-        is_verified=current_user.is_verified,
-        attempts=current_user.attempts
-    )

@@ -45,7 +45,7 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
             variant="ghost"
             size="sm"
             className="text-muted-foreground hover:text-foreground flex items-center"
-            onClick={() => router.push('/api/auth/signout')}
+            onClick={() => router.push('/api/auth/logout')}
           >
             <LogOut className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">Sign Out</span>
