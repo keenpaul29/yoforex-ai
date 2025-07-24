@@ -83,9 +83,13 @@ export default function SignIn() {
       const response = await authAPI.verifyLoginOtp({ phone: phoneNumber, otp });
 
       // Check for successful login response
-      if (response?.status === 'login_successful') {
-        // Backend sets HTTP-only cookie, so we just need to set authentication flag
-        localStorage.setItem('isAuthenticated', 'true');
+      if (response?.token || response?.status === 'success' || 
+          response?.status === 'login_successful' || response?.status === 'verified') {
+        // Store the token if received
+        if (response.token) {
+          localStorage.setItem('authToken', response.token);
+          localStorage.setItem('isAuthenticated', 'true');
+        }
         router.push('/dashboard');
       } else {
         setError('OTP verification failed. Please try again.');
@@ -102,16 +106,18 @@ export default function SignIn() {
       setError('Email and password are required');
       return;
     }
-
+    
     setLoading(true);
     setError('');
     try {
       const response = await authAPI.loginWithEmail({ email, password });
-
-      // Backend sets HTTP-only cookie, so we just need to check for successful response
-      if (response?.status === 'success' || response?.status === 'login_successful' || response?.message === 'Login successful') {
-        // Set authentication flag in localStorage for client-side routing
-        localStorage.setItem('isAuthenticated', 'true');
+      
+      if (response?.token || response?.status === 'success' || response?.status === 'login_successful') {
+        // Store the token if received
+        if (response.token) {
+          localStorage.setItem('authToken', response.token);
+          localStorage.setItem('isAuthenticated', 'true');
+        }
         router.push('/dashboard');
       } else {
         setError('Invalid email or password');

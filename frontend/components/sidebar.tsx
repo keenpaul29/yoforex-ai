@@ -255,7 +255,7 @@ export function Sidebar() {
           </button>
           <div className="flex items-center space-x-2">
             <BarChart3 className="h-6 w-6 text-blue-500" />
-            <span className="ml-2 text-lg font-bold text-white">YoForex AI</span>
+            <span className="text-lg font-bold text-white">YoForex AI</span>
           </div>
         </div>
       )}
@@ -334,6 +334,4 @@ export function Sidebar() {
       </div>
     </>
   );
-};
-
-export default Sidebar;
+}

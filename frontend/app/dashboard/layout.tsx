@@ -1,24 +1,26 @@
+import "../../app/globals.css"
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import DashboardLayout from './components/DashboardLayout';
+import DashboardLayout from './DashboardLayout';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'YoForex AI - Dashboard',
-  description: 'Your trading dashboard with AI-powered insights',
-};
+  title: 'YoForex AI - Advanced Trading Platform',
+  description: 'Professional forex trading platform with AI-powered analysis',};
 
-export default function DashboardRootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className={inter.className}>
-      <DashboardLayout>
-        {children}
-      </DashboardLayout>
-    </div>
+    <html lang="en">
+      <body className={inter.className}>
+        <DashboardLayout>
+          {children}
+        </DashboardLayout>
+      </body>
+    </html>
   );
 }

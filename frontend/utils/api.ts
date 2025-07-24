@@ -187,7 +187,7 @@ export const tradingAPI = {
     }).then(res => res.json());
   },
   
-  getSwingHistory: (limit: number) => 
+  getSwingHistory: (limit: number = 50) => 
     getData(`/swing/history?limit=${limit}`),
     
   // Scalp Trading
@@ -203,7 +203,7 @@ export const tradingAPI = {
     }).then(res => res.json());
   },
   
-  getScalpHistory: (limit: number) => 
+  getScalpHistory: (limit: number = 50) => 
     getData(`/scalp/history?limit=${limit}`)
 };
 

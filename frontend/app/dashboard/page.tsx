@@ -1,192 +1,197 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { fetchWithErrorHandling } from '@/services/api';
-import { toast } from '@/hooks/use-toast';
-
-// UI Components
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Skeleton } from '@/components/ui/skeleton';
-
 import { authAPI } from '@/utils/api';
-// Icons
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  Target, 
-  Calculator, 
-  Brain, 
-  Bell, 
-  BarChart, 
-  ArrowUpRight, 
-  ArrowDownRight, 
-  Calendar, 
-  Clock, 
-  Loader2, 
-  RefreshCw,
-  AlertCircle,
-  Newspaper
-} from 'lucide-react';
-
-// Charts
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  ResponsiveContainer, 
-  BarChart as RechartsBarChart, 
-  Bar,
-  Tooltip,
-  Legend
-} from 'recharts';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TrendingUp, TrendingDown, DollarSign, Target, Calculator, Brain, Bell, BarChart, ArrowUpRight, ArrowDownRight, Calendar, MapPin, Loader2 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart, Bar } from 'recharts';
+import { useState, useEffect } from 'react';
+import { marketAPI, tradingAPI, newsAPI, forumAPI } from '@/utils/api';
+import { useRouter } from 'next/navigation';
 
 // Types
-import { 
-  CurrencyPair, 
-  PerformanceData, 
-  NewsItem, 
-  ForumPost, 
-  TradingDataPoint 
-} from '@/types/dashboard';
-
-// Hooks
-import useDashboardData from '@/hooks/useDashboardData';
-
-// Utils
-import { format } from 'date-fns';
-
-// Badge variants are handled by the component itself
-
-// Loading Skeleton Component
-const LoadingSkeleton = () => (
-  <div className="space-y-4">
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {[...Array(4)].map((_, i) => (
-        <Card key={i} className="bg-slate-800 border-slate-700">
-          <CardContent className="p-4">
-            <Skeleton className="h-4 w-3/4 mb-2" />
-            <Skeleton className="h-6 w-1/2" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-    <Card className="bg-slate-800 border-slate-700">
-      <CardHeader>
-        <Skeleton className="h-6 w-1/4 mb-2" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-64 w-full" />
-      </CardContent>
-    </Card>
-  </div>
-);
-
-// Error State Component
-const ErrorState = ({ error, onRetry }: { error: string; onRetry: () => void }) => (
-  <Alert variant="destructive" className="mb-6">
-    <AlertCircle className="h-4 w-4" />
-    <AlertTitle>Error</AlertTitle>
-    <AlertDescription className="flex flex-col space-y-2">
-      <span>{error}</span>
-      <Button 
-        variant="outline" 
-        size="sm" 
-        className="self-start mt-2"
-        onClick={onRetry}
-      >
-        <RefreshCw className="h-4 w-4 mr-2" />
-        Retry
-      </Button>
-    </AlertDescription>
-  </Alert>
-);
-
-// CurrencyPairCard Component
-const CurrencyPairCard = ({ pair }: { pair: CurrencyPair }) => {
-  return (
-    <Card className="bg-slate-800 border-slate-700 hover:border-slate-600 transition-colors">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-sm text-slate-400">{pair.pair}</p>
-            <p className="text-2xl font-bold text-white">{pair.price}</p>
-          </div>
-          {pair.positive ? (
-            <Badge className="flex items-center gap-1 bg-green-600 text-white">
-              <ArrowUpRight size={14} />
-              {pair.change}
-            </Badge>
-          ) : (
-            <Badge className="flex items-center gap-1 bg-red-600 text-white">
-              <ArrowDownRight size={14} />
-              {pair.change}
-            </Badge>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
+type CurrencyPair = {
+  pair: string;
+  price: string;
+  change: string;
+  positive: boolean;
 };
 
-// Main Dashboard Component
+type PerformanceData = {
+  day: string;
+  value: number;
+};
+
+type NewsItem = {
+  id: string;
+  title: string;
+  summary: string;
+  published_at: string;
+  source: string;
+};
+
+type ForumPost = {
+  id: string;
+  author: string;
+  content: string;
+  likes: number;
+  comments: number;
+  timeAgo: string;
+  time?: string;
+  replies?: number;
+  avatar?: string;
+};
+
+type User = {
+  name: string;
+};
+
 export default function Dashboard() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
-  
-  // State for user data
-  const [user, setUser] = useState<{ name: string } | null>(null);
+  const [user, setUser] = useState<User | null>(null);
 
-  // Use data from our custom hook with fallbacks
-  const { data, loading, error, refetch } = useDashboardData();
-  
-  // Destructure data with fallbacks
-  const {
-    currencyPairs = [],
-    performanceData = [],
-    news = [],
-    communityPosts = [],
-    swingData = [],
-    scalpData = []
-  } = data || {};
-  
-  // Handle tab change with refetch
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    refetch(); // Refetch data when tab changes if needed
-  };
-  
-  // Fetch user data on component mount
+  // State for API data
+  const [currencyPairs, setCurrencyPairs] = useState<CurrencyPair[]>([]);
+  const [swingData, setSwingData] = useState<{ name: string, value: number }[]>([]);
+  const [scalpData, setScalpData] = useState<{ name: string, value: number }[]>([]);
+  const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [communityPosts, setCommunityPosts] = useState<ForumPost[]>([]);
+
+  // Sample data for fallback
+  const sampleCurrencyPairs: CurrencyPair[] = [
+    { pair: 'EUR/USD', price: '1.0892', change: '+0.05%', positive: true },
+    { pair: 'GBP/USD', price: '1.2754', change: '-0.12%', positive: false },
+    { pair: 'USD/JPY', price: '138.92', change: '+0.23%', positive: true },
+    { pair: 'AUD/USD', price: '0.6598', change: '+0.08%', positive: true },
+    { pair: 'USD/CAD', price: '1.3465', change: '-0.03%', positive: false },
+  ];
+
+  const samplePerformanceData: PerformanceData[] = [
+    { day: 'Mon', value: 100 },
+    { day: 'Tue', value: 150 },
+    { day: 'Wed', value: -50 },
+    { day: 'Thu', value: 180 },
+    { day: 'Fri', value: 120 },
+    { day: 'Sat', value: 250 },
+    { day: 'Sun', value: 140 },
+  ];
+
+  const sampleSwingData = [
+    { name: 'Jan', value: 12 },
+    { name: 'Feb', value: 19 },
+    { name: 'Mar', value: 15 },
+    { name: 'Apr', value: 25 },
+    { name: 'May', value: 22 },
+    { name: 'Jun', value: 30 },
+  ];
+
+  const sampleScalpData = [
+    { name: 'Jan', value: 8 },
+    { name: 'Feb', value: 14 },
+    { name: 'Mar', value: 12 },
+    { name: 'Apr', value: 18 },
+    { name: 'May', value: 16 },
+    { name: 'Jun', value: 21 },
+  ];
+
+  const sampleCommunityPosts: ForumPost[] = [
+    {
+      id: '1',
+      author: 'Michael R.',
+      timeAgo: '2 hours ago',
+      content: 'Just closed a EUR/USD long position with 2.3% profit! The AI analysis was spot on with the reversal point.',
+      likes: 24,
+      comments: 7,
+      avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=32&h=32&dpr=2'
+    },
+    {
+      id: '2',
+      author: 'Sarah K.',
+      timeAgo: '5 hours ago',
+      content: 'Has anyone else noticed the strong resistance level on GBP/JPY? Thinking about going short if it bounces again.',
+      likes: 15,
+      comments: 9,
+      avatar: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=32&h=32&dpr=2'
+    },
+    {
+      id: '3',
+      author: 'David L.',
+      timeAgo: '1 day ago',
+      content: 'The market sentiment indicator is showing extreme fear - could be a good buying opportunity for some major pairs.',
+      likes: 32,
+      comments: 14,
+      avatar: 'https://images.pexels.com/photos/91227/pexels-photo-91227.jpeg?auto=compress&cs=tinysrgb&w=32&h=32&dpr=2'
+    }
+  ];
+
+  // Fetch all data on component mount
   useEffect(() => {
-    const fetchUserData = async () => {
+    const fetchData = async () => {
       try {
-        // Use the centralized API service with the correct auth endpoint
-        const userData = await fetchWithErrorHandling<{ name: string }>('/auth/profile');
-        setUser(userData);
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to fetch user profile.',
-          variant: 'destructive',
-        });
+        setLoading(true);
+
+        // Fetch all data in parallel with proper error handling
+        const [pairs, performance, swing, scalp, latestNews, posts] = await Promise.all([
+          marketAPI.getCurrencyPairs().catch((err) => {
+            console.error('Error fetching currency pairs:', err);
+            return sampleCurrencyPairs;
+          }),
+          marketAPI.getPerformanceData().catch((err) => {
+            console.error('Error fetching performance data:', err);
+            return samplePerformanceData;
+          }),
+          tradingAPI.getSwingHistory(6).catch((err) => {
+            console.error('Error fetching swing data:', err);
+            return sampleSwingData;
+          }),
+          tradingAPI.getScalpHistory(6).catch((err) => {
+            console.error('Error fetching scalp data:', err);
+            return sampleScalpData;
+          }),
+          newsAPI.getNews().catch((err) => {
+            console.error('Error fetching news:', err);
+            return [];
+          }),
+          forumAPI.getPosts().catch((err) => {
+            console.error('Error fetching forum posts:', err);
+            return [];
+          })
+        ]);
+
+        setCurrencyPairs(Array.isArray(pairs) ? pairs : sampleCurrencyPairs);
+        setPerformanceData(Array.isArray(performance) ? performance : samplePerformanceData);
+        setSwingData(Array.isArray(swing) ? swing : sampleSwingData);
+        setScalpData(Array.isArray(scalp) ? scalp : sampleScalpData);
+        setNews(Array.isArray(latestNews) ? latestNews : []);
+        setCommunityPosts(Array.isArray(posts) && posts.length > 0 ? posts : sampleCommunityPosts);
+
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError('Failed to load dashboard data. Using sample data instead.');
+        // Set sample data as fallback
+        setCurrencyPairs(sampleCurrencyPairs);
+        setPerformanceData(samplePerformanceData);
+        setSwingData(sampleSwingData);
+        setScalpData(sampleScalpData);
+        setNews([]);
+        setCommunityPosts(sampleCommunityPosts);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchUserData();
+    fetchData();
   }, []);
 
   // Format currency pair data
   const formatCurrencyPairs = (pairs: any[]): CurrencyPair[] => {
-    if (!Array.isArray(pairs)) return [];
+    if (!Array.isArray(pairs)) return sampleCurrencyPairs;
     
     return pairs.map(pair => {
       // If the pair is already in the correct format, return it
@@ -215,71 +220,18 @@ export default function Dashboard() {
     });
   };
 
-
-  if (loading && !currencyPairs.length) {
-    return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader className="pb-2">
-                <div className="h-4 bg-muted rounded w-1/2"></div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-muted rounded w-3/4"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          <Card className="col-span-4 animate-pulse">
-            <CardHeader>
-              <div className="h-6 bg-muted rounded w-1/3"></div>
-            </CardHeader>
-            <CardContent className="h-[300px] bg-muted/20 rounded"></CardContent>
-          </Card>
-          <Card className="col-span-3 animate-pulse">
-            <CardHeader>
-              <div className="h-6 bg-muted rounded w-1/3"></div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="h-4 bg-muted rounded w-3/4"></div>
-                  <div className="h-3 bg-muted rounded w-1/2"></div>
-                  <div className="h-3 bg-muted rounded w-1/4"></div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-  
-  // Show error message if there's an error and no data is loaded
-  if (error && !currencyPairs.length) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4">
-        <Alert variant="destructive" className="max-w-md">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription className="mt-2">
-            {error} Some features may be limited. Please try refreshing the page.
-          </AlertDescription>
-        </Alert>
-        <Button 
-          variant="outline" 
-          className="mt-4"
-          onClick={() => window.location.reload()}
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh Page
-        </Button>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const profile = await authAPI.getProfile();
+        setUser(profile);
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      }
+    };
+    
+    fetchProfile();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -292,25 +244,17 @@ export default function Dashboard() {
       </div>
 
       {/* Currency Pairs */}
-
       <div className="flex space-x-4 overflow-x-auto pb-2">
         {currencyPairs.map((currency) => (
           <Card key={currency.pair} className="flex-shrink-0 bg-slate-800/50 border-slate-700 min-w-[140px]">
             <CardContent className="p-3">
               <div className="font-medium text-white text-sm">{currency.pair}</div>
               <div className="text-lg font-bold text-white">{currency.price}</div>
-              
-              {currency.positive ? (
-                <Badge className="flex items-center gap-1 bg-green-600 text-white">
-                  <ArrowUpRight size={14} />
-                  {currency.change}
-                </Badge>
-              ) : (
-                <Badge className="flex items-center gap-1 bg-red-600 text-white">
-                  <ArrowDownRight size={14} />
-                  {currency.change}
-                </Badge>
-              )}
+              <div className={`text-xs flex items-center ${currency.positive ? 'text-green-400' : 'text-red-400'
+                }`}>
+                {currency.positive ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                {currency.change}
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -322,7 +266,7 @@ export default function Dashboard() {
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-white mb-5">Swing Trading</CardTitle>
+              <CardTitle className="text-white">Swing Trading</CardTitle>
               <p className="text-slate-400 text-sm">H4, D1, W1 Timeframes</p>
             </div>
             <Badge className="bg-blue-600 text-white">7 Active</Badge>
@@ -352,7 +296,7 @@ export default function Dashboard() {
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-white mb-5">Scalp Trading</CardTitle>
+              <CardTitle className="text-white">Scalp Trading</CardTitle>
               <p className="text-slate-400 text-sm">M5, M15, M30 Timeframes</p>
             </div>
             <Badge className="bg-purple-600 text-white">12 Active</Badge>
@@ -383,9 +327,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Performance Statistics */}
         <Card className="lg:col-span-2 bg-slate-800/50 border-slate-700">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-white mb-5">Performance Statistics</CardTitle>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-white">Performance Statistics</CardTitle>
               <Tabs defaultValue="week" className="w-auto">
                 <TabsList className="bg-slate-700">
                   <TabsTrigger value="week" className="text-xs">This Week</TabsTrigger>
@@ -470,21 +414,11 @@ export default function Dashboard() {
           <CardContent className="space-y-4">
             {communityPosts.map((post, index) => (
               <div key={index} className="flex space-x-3 p-3 rounded-lg bg-slate-700/30">
-                <div className="relative h-10 w-10 rounded-full overflow-hidden bg-slate-600 flex items-center justify-center">
-                  {post.avatar ? (
-                    <Image
-                      src={post.avatar}
-                      alt={post.author}
-                      fill
-                      className="object-cover"
-                      sizes="40px"
-                    />
-                  ) : (
-                    <span className="text-white text-sm font-medium">
-                      {post.author.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
+                <img
+                  src={post.avatar}
+                  alt={post.author}
+                  className="h-10 w-10 rounded-full object-cover"
+                />
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-1">
                     <span className="font-medium text-white text-sm">{post.author}</span>
@@ -501,103 +435,59 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Market News */}
+        {/* Trading Tips */}
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-white">Market News</CardTitle>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="border-slate-600 text-slate-300"
-              onClick={() => refetch()}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Refresh
-            </Button>
+          <CardHeader>
+            <CardTitle className="text-white">Trading Tips</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 max-h-[600px] overflow-y-auto">
-            {loading && !news.length ? (
-              // Loading state
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="p-3 rounded-lg bg-slate-700/30 animate-pulse">
-                    <div className="h-4 bg-slate-600 rounded w-3/4 mb-2"></div>
-                    <div className="h-3 bg-slate-600 rounded w-full mb-2"></div>
-                    <div className="h-3 bg-slate-600 rounded w-1/2"></div>
-                  </div>
-                ))}
+          <CardContent className="space-y-4">
+            <div className="p-3 rounded-lg bg-blue-900/30 border border-blue-800">
+              <h4 className="font-medium text-white mb-2 flex items-center">
+                <Calendar className="h-4 w-4 mr-2" />
+                Daily Insight
+              </h4>
+              <p className="text-sm text-slate-300">
+                USD is showing strength against major pairs today due to positive economic data. Consider this in your trade planning.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg bg-orange-900/30 border border-orange-800">
+              <h4 className="font-medium text-white mb-2">Risk Management Reminder</h4>
+              <p className="text-sm text-slate-300">
+                Never risk more than 2% of your account on a single trade. Your suggested max position size today: $240.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg bg-green-900/30 border border-green-800">
+              <h4 className="font-medium text-white mb-2">Market Events</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between text-slate-300">
+                  <span>USD CPI Data</span>
+                  <span className="text-yellow-400">High Impact</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>USD FOMC Statement</span>
+                  <span className="text-red-400">Extreme Impact</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>GBP Employment Change</span>
+                  <span className="text-yellow-400">High Impact</span>
+                </div>
               </div>
-            ) : error ? (
-              // Error state
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error loading news</AlertTitle>
-                <AlertDescription className="mt-2">
-                  {error}
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="mt-2"
-                    onClick={() => refetch()}
-                  >
-                    Retry
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            ) : news.length > 0 ? (
-              // News items
-              news.map((item, index) => (
-                <a
-                  key={index}
-                  href={item.url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block p-3 rounded-lg hover:bg-slate-700/30 transition-colors border border-slate-700"
-                >
-                  <div className="flex items-start">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-white mb-1 line-clamp-2">
-                        {item.headline}
-                      </h4>
-                      <p className="text-sm text-slate-400 mb-2 line-clamp-2">
-                        {item.summary}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500">
-                          {item.source} • {new Date(item.time).toLocaleDateString()}
-                        </span>
-                        {item.sentiment && (
-                          <Badge
-                            variant={
-                              item.sentiment === 'positive'
-                                ? 'success'
-                                : item.sentiment === 'negative'
-                                ? 'destructive'
-                                : 'outline'
-                            }
-                            className="text-xs"
-                          >
-                            {item.sentiment.charAt(0).toUpperCase() +
-                              item.sentiment.slice(1)}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
+              <div className="mt-3 pt-3 border-t border-green-800">
+                <h5 className="font-medium text-white text-sm mb-1">Upcoming Events (Next 2 Hours)</h5>
+                <div className="space-y-1 text-xs text-slate-300">
+                  <div className="flex justify-between">
+                    <span>USD CPI Data</span>
+                    <span>2:30 PM</span>
                   </div>
-                </a>
-              ))
-            ) : (
-              // Empty state
-              <div className="text-center py-8">
-                <Newspaper className="h-10 w-10 mx-auto text-slate-500 mb-2" />
-                <p className="text-slate-400">No news available at the moment</p>
+                  <div className="flex justify-between">
+                    <span>EUR ECB Speech</span>
+                    <span>3:15 PM</span>
+                  </div>
+                </div>
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
       </div>
