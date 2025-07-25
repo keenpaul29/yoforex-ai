@@ -24,7 +24,7 @@ async def get_trading_news():
             raise HTTPException(status_code=502, detail="No news received from provider")
 
         top_news = []
-        for article in market_news[:5]:  # You can change to top 3 or more
+        for article in market_news[:50]:  # You can change to top 3 or more
             top_news.append(NewsArticle(
                 headline=article.get('headline', 'No headline'),
                 summary=article.get('summary', 'No summary available'),
