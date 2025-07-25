@@ -331,7 +331,7 @@ async def verify_token(
 
 # --- Endpoints ---
 
-@router.post("/signup", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 def signup_endpoint(payload: SignupRequest, db: Session = Depends(get_db)):
     existing = db.query(User)\
         .filter((User.phone == payload.phone) | (User.email == payload.email))\
