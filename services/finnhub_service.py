@@ -22,14 +22,13 @@ _session.mount("https://", _adapter)
 _session.mount("http://", _adapter)
 _session.headers.update({"X-Finnhub-Token": FINNHUB_TOKEN})
 
-# Static mapping for Forex and Crypto
+# Static mapping for Forex and Crypto (if you use get_ohlcv elsewhere)
 FOREX_SYMBOL_MAP = {
     "XAUUSD": "OANDA:XAU_USD",
     "EURUSD": "OANDA:EUR_USD",
     "GBPUSD": "OANDA:GBP_USD",
     "USDJPY": "OANDA:USD_JPY",
 }
-
 CRYPTO_SYMBOL_MAP = {
     "BTCUSD": "BINANCE:BTCUSDT",
     "ETHUSD": "BINANCE:ETHUSDT",
@@ -91,6 +90,9 @@ def get_ohlcv(symbol: str, resolution: str = "5", count: int = 50):
 
 
 class FinnhubService:
+    """
+    Async client for Finnhub news endpoints.
+    """
     def __init__(self):
         self.api_key = FINNHUB_TOKEN
         self.base_url = "https://finnhub.io/api/v1"
@@ -98,13 +100,12 @@ class FinnhubService:
 
     async def get_market_news(self, limit: int = 50):
         """
-        Fetch latest trading-related news (forex + filtered general),
-        up to the specified limit (default: 50)
+        Fetch up to `limit` articles by combining 'forex' and unfiltered 'general' categories.
         """
         try:
             all_articles = []
 
-            # Step 1: Try forex category
+            # 1) Forex category
             r_forex = await self.client.get(
                 f"{self.base_url}/news",
                 params={"category": "forex"},
@@ -114,41 +115,34 @@ class FinnhubService:
             forex_news = r_forex.json() or []
             all_articles.extend(forex_news)
 
-            # If less than required, fetch general news too
-            if len(all_articles) < limit:
-                r_general = await self.client.get(
-                    f"{self.base_url}/news",
-                    params={"category": "general"},
-                    timeout=10
-                )
-                r_general.raise_for_status()
-                general_news = r_general.json() or []
+            # 2) General category (unfiltered)
+            r_general = await self.client.get(
+                f"{self.base_url}/news",
+                params={"category": "general"},
+                timeout=10
+            )
+            r_general.raise_for_status()
+            general_news = r_general.json() or []
+            all_articles.extend(general_news)
 
-                # Filter general news for trading/forex keywords
-                trading_keywords = ["forex", "usd", "eur", "gold", "xauusd", "fomc", "inflation", "interest rate", "fed"]
-                filtered_general = [
-                    article for article in general_news
-                    if any(kw in article.get("headline", "").lower() for kw in trading_keywords)
-                ]
-
-                all_articles.extend(filtered_general)
-
-            # Remove duplicates based on headline
+            # Deduplicate by headline
             seen = set()
-            unique_articles = []
-            for article in all_articles:
-                headline = article.get("headline", "")
-                if headline and headline not in seen:
-                    seen.add(headline)
-                    unique_articles.append(article)
+            unique = []
+            for art in all_articles:
+                hl = art.get("headline", "")
+                if hl and hl not in seen:
+                    seen.add(hl)
+                    unique.append(art)
 
-            return unique_articles[:limit]
-
+            return unique[:limit]
         except Exception as e:
             print(f"[get_market_news] Error: {e}")
             return []
 
     async def get_company_news(self, symbol: str):
+        """
+        Fetch up to 30 days of company-specific news.
+        """
         try:
             to_date = datetime.now()
             from_date = to_date - timedelta(days=30)
