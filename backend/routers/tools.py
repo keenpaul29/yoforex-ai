@@ -28,6 +28,7 @@ class AIAnalysisRequest(BaseModel):
 @router.post("/ai-analysis")
 async def ai_analysis(req: AIAnalysisRequest):
     # stub – plug your AI model here
+    
     return {"analysis": f"Signal for {req.pair} on {req.timeframe}"}
 
 class BacktestRequest(BaseModel):

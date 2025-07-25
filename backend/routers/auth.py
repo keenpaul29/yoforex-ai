@@ -8,8 +8,9 @@ from typing import Dict, Any, Optional
 
 import requests
 import phonenumbers
-from fastapi import APIRouter, HTTPException, Depends, status, Response, Request
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, HTTPException, Depends, status, Request, Response as FastAPIResponse
+from fastapi.security import OAuth2PasswordRequestForm, HTTPBearer
+from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr, validator, field_validator
 from pydantic_core import PydanticCustomError
@@ -271,6 +272,63 @@ def send_whatsapp_otp(phone: str, otp: str) -> Dict[str, Any]:
             return {"status": "success", "message": "OTP would be sent in production", "otp": otp, "phone": phone}
         raise HTTPException(status_code=500, detail=f"Failed to send OTP: {str(e)}")
 
+# --- Token Verification Endpoint ---
+
+@router.post("/verify-token")
+async def verify_token(
+    request: Request, 
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify if the provided JWT token is valid.
+    Returns user information if the token is valid.
+    """
+    # Get token from cookies or Authorization header
+    token = request.cookies.get("access_token")
+    if not token and "authorization" in request.headers:
+        auth_header = request.headers["authorization"]
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+    
+    if not token:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return {"valid": False, "detail": "No authentication token provided"}
+    
+    try:
+        payload = verify_access_token(token)
+        email = payload.get("sub")
+        if not email:
+            response.status_code = status.HTTP_401_UNAUTHORIZED
+            return {"valid": False, "detail": "Invalid token"}
+        
+        # Get user from database
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            response.status_code = status.HTTP_404_NOT_FOUND
+            return {"valid": False, "detail": "User not found"}
+        
+        # Set CORS headers
+        origin = request.headers.get("origin")
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Vary"] = "Origin"
+        
+        return {
+            "valid": True,
+            "user": {
+                "email": user.email,
+                "name": user.name,
+                "is_verified": user.is_verified,
+                "phone": user.phone
+            }
+        }
+        
+    except JWTError as e:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return {"valid": False, "detail": "Invalid or expired token"}
+
 # --- Endpoints ---
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
@@ -421,29 +479,98 @@ def request_login_otp(payload: OTPRequest, db: Session = Depends(get_db)):
         )
 
 @router.post("/login/verify-otp")
-def verify_login_otp(
+async def verify_login_otp(
     payload: OTPVerifyRequest,
-    response: Response,
+    response: FastAPIResponse,
     db: Session = Depends(get_db),
 ):
+    # Find user by phone
     user = db.query(User).filter(User.phone == payload.phone).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "User not found", "code": "user_not_found"}
+        )
+    
+    # Check if OTP is expired
     if datetime.utcnow() > user.otp_expiry:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired.")
-    if payload.otp != user.otp_code:
-        user.attempts += 1
-        db.commit()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "OTP expired", "code": "otp_expired"}
+        )
+    
+    # Verify OTP using WATI API if configured, otherwise use local verification
+    if WATI_API_ENDPOINT and WATI_ACCESS_TOKEN:
+        try:
+            # Call WATI API to verify OTP
+            url = f"{WATI_API_ENDPOINT}/api/v1/verifyOtp"
+            headers = {
+                "Authorization": WATI_ACCESS_TOKEN,
+                "Content-Type": "application/json"
+            }
+            data = { ... }
+
+            wati_resp = requests.post(url, json=data, headers=headers, timeout=10)
+            wati_resp.raise_for_status()
+            verification_result = wati_resp.json()
+            
+            if not verification_result.get("valid", False):
+                user.attempts += 1
+                db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"error": "Invalid OTP", "code": "invalid_otp"}
+                )
+                
+        except requests.HTTPError as e:
+            logger.error(f"WATI verification failed: {str(e)}")
+            # Fallback to local verification if WATI fails
+            if payload.otp != user.otp_code:
+                user.attempts += 1
+                db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"error": "Invalid OTP", "code": "invalid_otp"}
+                )
+        except Exception as e:
+            logger.error(f"Error verifying OTP with WATI: {str(e)}")
+            # Fallback to local verification if there's an error
+            if payload.otp != user.otp_code:
+                user.attempts += 1
+                db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"error": "Invalid OTP", "code": "invalid_otp"}
+                )
+    else:
+        # Local verification if WATI is not configured
+        if payload.otp != user.otp_code:
+            user.attempts += 1
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "Invalid OTP", "code": "invalid_otp"}
+            )
+    
+    # If we get here, OTP is valid
+    # Reset attempts and generate new token
+    user.attempts = 0
+    user.otp_code = None  # Invalidate the OTP after successful verification
+    db.commit()
+    
+    # Create JWT token
     token = create_access_token({"sub": user.email})
-      # clear any old cookie, then set the new one
+    # print(response)
+    # Set secure HTTP-only cookie
     response.delete_cookie("access_token", path="/")
+
+    is_prod = os.getenv("ENV") == "production"
     response.set_cookie(
-        "access_token",
-        token,
+        key="access_token",
+        value=token,
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=True if is_prod else False,
+        samesite="none" if is_prod else "lax",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
