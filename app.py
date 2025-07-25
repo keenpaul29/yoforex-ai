@@ -43,6 +43,9 @@ app.include_router(auth.router)
 app.include_router(scalp.router, prefix="/scalp", tags=["Chart Analysis"])
 app.include_router(swing.router, prefix="/swing", tags=["Chart Analysis"])
 
+#live trading oprices
+app.include_router(prices.router, prefix="/prices", tags=["Prices"])
+
 #news
 app.include_router(news_router, prefix="/news", tags=["Trading News"])
 
@@ -61,7 +64,7 @@ async def startup_event():
     await start_alert_sync_task()
 
 app.include_router(trades.router, prefix="/trades", tags=["Trades"])
-app.include_router(prices.router, prefix="/prices", tags=["Prices"])
+
 
 
 
