@@ -128,6 +128,21 @@ class JSONEncodedDict(TypeDecorator):
 class SwingAnalysisHistory(Base):
     __tablename__ = "swing_analysis_history"
 
-    id         = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     analysis   = Column(JSONEncodedDict, nullable=False)
+    
+    # Relationship
+    user = relationship("User", back_populates="swing_analysis_history")
+
+class ScalpAnalysisHistory(Base):
+    __tablename__ = "scalp_analysis_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    analysis   = Column(JSONEncodedDict, nullable=False)
+    
+    # Relationship
+    user = relationship("User", back_populates="scalp_analysis_history")
