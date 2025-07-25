@@ -43,16 +43,27 @@ app.include_router(auth.router)
 app.include_router(scalp.router, prefix="/scalp", tags=["Chart Analysis"])
 app.include_router(swing.router, prefix="/swing", tags=["Chart Analysis"])
 
+#news
+app.include_router(news_router, prefix="/news", tags=["Trading News"])
+
+#Graph Extarcting from here
+app.include_router(tools.router, prefix="/tools", tags=["Tools"])
+
 # new functionality
 app.include_router(market.router, prefix="/market", tags=["Market"])
 app.include_router(performance.router, prefix="/performance", tags=["Performance"])
-app.include_router(tools.router, prefix="/tools", tags=["Tools"])
-app.include_router(forum.router, prefix="/forum", tags=["Forum"])
+
+app.include_router(forum.router, prefix="/forum", tags=["forum"])
 
 # Initialize background tasks
 @app.on_event("startup")
 async def startup_event():
     await start_alert_sync_task()
-app.include_router(news_router, prefix="/news", tags=["Trading News"])
+
 app.include_router(trades.router, prefix="/trades", tags=["Trades"])
 app.include_router(prices.router, prefix="/prices", tags=["Prices"])
+
+
+
+from routers import ohlcv
+app.include_router(ohlcv.router, prefix="/tools", tags=["Tools"])

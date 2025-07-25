@@ -173,15 +173,12 @@ class ProfileResponse(BaseModel):
     attempts: int
 
 # For update profile endpoint
-class ProfileUpdateRequest(BaseModel):
-    name: str | None = None
-    email: EmailStr | None = None
-    phone: str | None = None
 
 class ProfileUpdateRequest(BaseModel):
-    name: str | None = None
-    phone: str | None = None
-    # Add more fields as needed
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+
     @validator('phone')
     def validate_phone(cls, v):
         if v and (len(v) < 6 or len(v) > 15):
@@ -420,10 +417,6 @@ def reset_password(payload: PasswordReset, db: Session = Depends(get_db)):
 
 from pydantic import BaseModel, EmailStr
 
-class ProfileUpdateRequest(BaseModel):
-    name: str | None = None
-    email: EmailStr | None = None
-    phone: str | None = None
 
 @router.get("/profile", response_model=ProfileResponse)
 def get_profile(current_user: User = Depends(get_current_user)):
