@@ -96,10 +96,10 @@ class FinnhubService:
         self.base_url = "https://finnhub.io/api/v1"
         self.client = httpx.AsyncClient(headers={"X-Finnhub-Token": self.api_key})
 
-    async def get_market_news(self, limit: int = 5):
+    async def get_market_news(self, limit: int = 100):
         """
         Fetch latest trading-related news (forex + filtered general),
-        up to the specified limit (default: 5)
+        up to the specified limit (default: 100)
         """
         try:
             all_articles = []

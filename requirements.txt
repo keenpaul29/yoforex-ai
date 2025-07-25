@@ -16,3 +16,4 @@ httpx
 fastapi-limiter
 alembic
 psycopg2
+oandapyV20
