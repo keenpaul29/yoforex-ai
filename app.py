@@ -28,6 +28,7 @@ origins = [
     "http://localhost:3000",
     "https://app.axiontrust.com",
     "https://axiontrust.com",
+    "https://app.yoforex.co.in",
 ]
 
 app.add_middleware(
@@ -56,7 +57,6 @@ app.include_router(tools.router, prefix="/tools", tags=["Tools"])
 app.include_router(market.router, prefix="/market", tags=["Market"])
 app.include_router(performance.router, prefix="/performance", tags=["Performance"])
 
-app.include_router(forum.router, prefix="/forum", tags=["forum"])
 
 # Initialize background tasks
 @app.on_event("startup")
@@ -70,3 +70,6 @@ app.include_router(trades.router, prefix="/trades", tags=["Trades"])
 
 from routers import ohlcv
 app.include_router(ohlcv.router, prefix="/tools", tags=["Tools"])
+
+
+app.include_router(forum.router, prefix="/forum", tags=["forum"])
